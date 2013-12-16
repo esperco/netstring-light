@@ -8,20 +8,30 @@ type domain = string
 
 type addr_spec = local_part * domain option
 
-class mailbox
-  ?(name : string option) (route : string list) (spec : addr_spec) =
-object
-  method name = match name with Some s -> s | _ -> raise Not_found
-  method route = route
-  method spec = spec
-end
+type mailbox = {
+  mailbox_name  : string option;
+    (** The name of the mailbox. *)
+  mailbox_route : string list;
+    (** The route to the mailbox *)
+  mailbox_spec  : addr_spec;
+    (** The formal address specification *)
+}
 
-class group
-  (name : string) (mailboxes : mailbox list) =
-object
-  method name = name
-  method mailboxes = mailboxes
-end
+let create_mailbox ?name route spec = {
+  mailbox_name = name;
+  mailbox_route = route;
+  mailbox_spec = spec;
+}
+
+type group = {
+  group_name : string;
+  group_mailboxes : mailbox list;
+}
+
+let create_group name mailboxes = {
+  group_name = name;
+  group_mailboxes = mailboxes;
+}
 
 type t =
   [ `Mailbox of mailbox
@@ -30,11 +40,11 @@ type t =
 
 let mbox_addr_spec spec =
   `Mailbox
-    (new mailbox [] spec)
+    (create_mailbox [] spec)
 
 let mbox_route_addr personal (route, spec) =
   `Mailbox
-    (new mailbox ?name:personal route spec)
+    (create_mailbox ?name:personal route spec)
 
 open Nlmimestring
 
@@ -118,7 +128,7 @@ let parse string =
   and group name =
     let mboxes = mailbox_list_opt () in
     special ';';
-    `Group (new group name mboxes)
+    `Group (create_group name mboxes)
 
   and mailbox_list_opt () =
     match peek () with

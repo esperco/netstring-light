@@ -22,35 +22,33 @@ type addr_spec = local_part * domain option
  *
  * Create a [mailbox] with
  *
- * [ new mailbox ~name route addr_spec ]
+ * [ create_mailbox ~name route addr_spec ]
  *
  * Pass [route = []] if not used (formerly, routes were used to specify
  * the way the mail should take from the sender to the receiver, and
  * contained a list of hostnames/IP addresses).
  *)
-class mailbox :
-  ?name:string -> string list -> addr_spec ->
-object
-  method name  : string
-    (** The name of the mailbox. Raises [Not_found] if not set *)
-  method route : string list
+type mailbox = {
+  mailbox_name  : string option;
+    (** The name of the mailbox. *)
+  mailbox_route : string list;
     (** The route to the mailbox *)
-  method spec  : addr_spec
+  mailbox_spec  : addr_spec;
     (** The formal address specification *)
-end
+}
+
+val create_mailbox : ?name:string -> string list -> addr_spec -> mailbox
 
 (** A [group] has a name, and consists of a number of mailboxes.
  *
- * Create a group with [new group name mailboxes].
+ * Create a group with [create_group name mailboxes].
  *)
-class group :
-  string -> mailbox list ->
-object
-  method name : string
+type group = {
+  group_name : string;
     (** The name of the group *)
-  method mailboxes : mailbox list
+  group_mailboxes : mailbox list;
     (** The member mailboxes *)
-end
+}
 
 
 (** The union of [mailbox] and [group]
