@@ -35,7 +35,7 @@ all: nldate.ml nlstring_str.ml
 	$(OCAMLC) -c $(FLAGS) nladdress.ml
 	$(OCAMLC) -a $(FLAGS) -o netstring-light.cma \
 		nldate.cmo nlencoding.cmo nlstring_str.cmo nlaux.cmo \
-		nlsockaddr.cmo nlbuffer.cmo nlchannels.cmo nlstream.mli \
+		nlsockaddr.cmo nlbuffer.cmo nlchannels.cmo nlstream.cmo \
 		nlurl.cmo nlmimestring.cmo nladdress.cmo
 opt: nldate.ml nlstring_str.ml
 	$(OCAMLC) -c $(FLAGS) nldate.mli
@@ -62,7 +62,7 @@ opt: nldate.ml nlstring_str.ml
 	$(OCAMLOPT) -c $(FLAGS) nladdress.ml
 	$(OCAMLOPT) -a $(FLAGS) -o netstring-light.cmxa \
 		nldate.cmx nlencoding.cmx nlstring_str.cmx nlaux.cmx \
-		nlsockaddr.cmx nlbuffer.cmx nlchannels.cmx \
+		nlsockaddr.cmx nlbuffer.cmx nlchannels.cmx nlstream.cmx \
 		nlurl.cmx nlmimestring.cmx nladdress.cmx
 doc:
 	mkdir -p ../html
