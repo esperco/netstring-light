@@ -36,7 +36,7 @@ all: nldate.ml nlstring_str.ml
 	$(OCAMLC) -c $(FLAGS) nlmime.mli
 	$(OCAMLC) -c $(FLAGS) nlmime.ml
 	$(OCAMLC) -a $(FLAGS) -o netstring-light.cma \
-		nldate.cmo nlchannels.cmo nlbuffer.cmo nlencoding.cmo \
+		nldate.cmo nlbuffer.cmo nlchannels.cmo nlencoding.cmo \
 		nlstring_str.cmo nlaux.cmo nlsockaddr.cmo nlstream.cmo \
 		nlurl.cmo nlmimestring.cmo nladdress.cmo nlmime.cmo
 opt: nldate.ml nlstring_str.ml
