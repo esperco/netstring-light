@@ -33,10 +33,12 @@ all: nldate.ml nlstring_str.ml
 	$(OCAMLC) -c $(FLAGS) nlmimestring.ml
 	$(OCAMLC) -c $(FLAGS) nladdress.mli
 	$(OCAMLC) -c $(FLAGS) nladdress.ml
+	$(OCAMLC) -c $(FLAGS) nlmime.mli
+	$(OCAMLC) -c $(FLAGS) nlmime.ml
 	$(OCAMLC) -a $(FLAGS) -o netstring-light.cma \
 		nldate.cmo nlencoding.cmo nlstring_str.cmo nlaux.cmo \
 		nlsockaddr.cmo nlbuffer.cmo nlchannels.cmo nlstream.cmo \
-		nlurl.cmo nlmimestring.cmo nladdress.cmo
+		nlurl.cmo nlmimestring.cmo nladdress.cmo nlmime.cmo
 opt: nldate.ml nlstring_str.ml
 	$(OCAMLC) -c $(FLAGS) nldate.mli
 	$(OCAMLOPT) -c $(FLAGS) nldate.ml
@@ -60,16 +62,18 @@ opt: nldate.ml nlstring_str.ml
 	$(OCAMLOPT) -c $(FLAGS) nlmimestring.ml
 	$(OCAMLC) -c $(FLAGS) nladdress.mli
 	$(OCAMLOPT) -c $(FLAGS) nladdress.ml
+	$(OCAMLC) -c $(FLAGS) nlmime.mli
+	$(OCAMLOPT) -c $(FLAGS) nlmime.ml
 	$(OCAMLOPT) -a $(FLAGS) -o netstring-light.cmxa \
 		nldate.cmx nlencoding.cmx nlstring_str.cmx nlaux.cmx \
 		nlsockaddr.cmx nlbuffer.cmx nlchannels.cmx nlstream.cmx \
-		nlurl.cmx nlmimestring.cmx nladdress.cmx
+		nlurl.cmx nlmimestring.cmx nladdress.cmx nlmime.cmx
 doc:
 	mkdir -p ../html
 	ocamldoc -html -d ../html \
 		nldate.mli nlencoding.mli nlstring_str.mli nlaux.mli \
 		nlsockaddr.mli nlbuffer.mli nlchannels.mli nlstream.mli \
-		nlurl.mli nlmimestring.mli nladdress.mli
+		nlurl.mli nlmimestring.mli nladdress.mli nlmime.mli
 
 netstring-light.cmxa: opt
 

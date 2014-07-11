@@ -58,6 +58,19 @@ module Base64 : sig
        * '>' is considered as "space", too (so you don't have trouble with
        * mbox mailboxes that accidentally quote "From").
        *)
+
+  class encoding_pipe : ?linelength:int -> ?crlf:bool -> unit ->
+                          Nlchannels.pipe
+      (** This pipe encodes the data written into the pipe. 
+       * [linelength] and [crlf] work as in [encode].
+       *)
+
+  class decoding_pipe : ?url_variant:bool -> ?accept_spaces:bool -> unit ->
+                          Nlchannels.pipe
+      (** This pipe decodes the data written into the pipe.
+       * [url_variant] and [accept_spaces] work as in [decode].
+       *)
+
 end
 
 (* *********************************************************************)
@@ -112,6 +125,13 @@ module QuotedPrintable :
 	 * [pos] (default: 0) with length [len] (default: rest of the string)
 	 * is decoded.
 	 *)
+
+    class encoding_pipe : ?crlf:bool -> unit -> Nlchannels.pipe
+      (** This pipe encodes the data written into the pipe. *)
+
+    class decoding_pipe : unit -> Nlchannels.pipe
+      (** This pipe decodes the data written into the pipe. *)
+
 
   end
 

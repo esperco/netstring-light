@@ -340,6 +340,79 @@ module Base64 = struct
     let l = match len with None -> String.length s - pos | Some x -> x in
     let (s,_,_) = decode_prefix s pos l url_variant accept_spaces true false in
     s
+
+  (* TODO: Use Netbuffer.add_inplace instead of creating an intermediate 
+   * string s in [decoding_pipe_conv].
+   *)
+
+  let decoding_pipe_conv url_variant accept_spaces padding_seen
+                         incoming incoming_eof outgoing =
+    let len = Nlbuffer.length incoming in
+    let t = Nlbuffer.unsafe_buffer incoming in
+    if !padding_seen then begin
+      (* Only accept the null string: *)
+      let _,_,_ = decode_prefix t 0 len url_variant accept_spaces false true in
+      Nlbuffer.clear incoming
+    end
+    else begin
+      let (s,n,ps) =
+        decode_prefix t 0 len url_variant accept_spaces incoming_eof false in
+      padding_seen := ps;
+      if incoming_eof then
+        Nlbuffer.clear incoming
+      else
+        Nlbuffer.delete incoming 0 n;
+      Nlbuffer.add_string outgoing s
+    end;
+
+
+  class decoding_pipe ?(url_variant=true) ?(accept_spaces=false) () =
+    let padding_seen = ref false in
+    Nlchannels.pipe
+      ~conv:(decoding_pipe_conv url_variant accept_spaces padding_seen) ()
+
+  let encoding_pipe_conv ?(linelength = 0) ?(crlf = false) lastlen 
+                         incoming incoming_eof outgoing =
+    let linelength = (linelength asr 2) lsl 2 in
+    let len = Nlbuffer.length incoming in
+    let len' =
+      if incoming_eof then 
+	len
+      else
+	len - (len mod 3)    (* only process a multiple of three characters *)
+    in
+    let (s,ll) = 
+      encode_with_options 
+	rfc_pattern '=' (Nlbuffer.unsafe_buffer incoming) 0 len' 
+	linelength (linelength - !lastlen) crlf
+    in
+    Nlbuffer.delete incoming 0 len';
+    (* LF/CRLF: Unless s = "", s ends with a LF/CRLF. This is only right
+     * if ll = 0 or at EOF. In the other cases, this additional LF/CRLF
+     * must not be added to [outgoing].
+     *)
+    if linelength < 3  ||  ll=0  ||  s="" then begin
+      Nlbuffer.add_string outgoing s;
+    end
+    else begin
+      let sl = String.length s in
+      assert(s.[sl-1] = '\n');
+      let sl' = if crlf then sl-2 else sl-1 in
+      Nlbuffer.add_sub_string outgoing s 0 sl';
+    end;
+    lastlen := ll;
+    (* Ensure there is a LF/CRLF at the end: *)
+    if incoming_eof && linelength > 3 && ll > 0 then
+      Nlbuffer.add_string outgoing (if crlf then "\r\n" else "\n");
+
+      (* TODO: Can be improved by using Netbuffer.add_inplace
+       *)
+
+
+  class encoding_pipe ?linelength ?crlf () =
+    let lastlen = ref 0 in
+    Nlchannels.pipe ~conv:(encoding_pipe_conv ?linelength ?crlf lastlen) ()
+
 end
 
 
@@ -604,6 +677,59 @@ module QuotedPrintable = struct
   let decode ?(pos=0) ?len s =
     let l = match len with None -> String.length s - pos | Some x -> x in
     decode_substring s pos l
+
+  let encoding_pipe_conv ?crlf line_length incoming incoming_eof outgoing =
+    (* Problematic case: the incoming buffer ends with a space, but we are
+     * not at EOF. It is possible that a LF immediately follows, and that
+     * the space needs to be quoted.
+     * Solution: Do not convert such spaces, they remain in the buffer.
+     *)
+    let s = Nlbuffer.unsafe_buffer incoming in
+    let len = Nlbuffer.length incoming in
+    let (len',eot) =
+      if not incoming_eof && len > 0 && s.[len-1] = ' ' then
+	(len-1, false)
+      else
+	(len, true)
+    in
+    let s' = encode_substring ?crlf ~eot ~line_length s ~pos:0 ~len:len' in
+    Nlbuffer.add_string outgoing s';
+    Nlbuffer.delete incoming 0 len'
+  ;;
+    
+
+  class encoding_pipe ?crlf () =
+    let line_length = ref 0 in
+    Nlchannels.pipe ~conv:(encoding_pipe_conv ?crlf line_length) ()
+
+  let decoding_pipe_conv incoming incoming_eof outgoing =
+    (* Problematic case: The incoming buffer ends with '=' or '=X'. In this
+     * case these characters remain in the buffer, because they will be
+     * completed to a full hex sequence by the next conversion call.
+     *)
+    let s = Nlbuffer.unsafe_buffer incoming in
+    let len = Nlbuffer.length incoming in
+    let len' =
+      if not incoming_eof then begin
+	if len > 0 && s.[len-1] = '=' then
+	  len - 1  
+	else
+	  if len > 1 && s.[len-2] = '=' then
+	    len - 2
+	  else
+	    len
+      end
+      else
+	len
+    in
+    let s' = decode ~len:len' s in
+    Nlbuffer.add_string outgoing s';
+    Nlbuffer.delete incoming 0 len'
+  ;;
+
+    
+  class decoding_pipe () =
+    Nlchannels.pipe ~conv:decoding_pipe_conv ()
 
 end
 
