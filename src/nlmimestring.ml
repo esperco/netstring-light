@@ -1135,6 +1135,8 @@ let scan_value_with_parameters_ep_int ?decode s options =
   and parse_rest tl =
     match tl with
         [] -> []
+      | Special ';' :: [] ->
+          [] (* Allow trailing semicolon *)
       | Special ';' :: tl' ->
           parse_params tl'
       | _ ->
