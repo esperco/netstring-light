@@ -1,5 +1,5 @@
 name = "netstring-light"
-version = "0.0.0"
+version = "0.0.2"
 description = "Standalone subset of the Netstring library from OCamlnet"
 requires = "unix str bigarray"
 archive(byte) = "netstring-light.cma"

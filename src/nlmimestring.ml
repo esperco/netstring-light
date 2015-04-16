@@ -1193,8 +1193,339 @@ let scan_mime_type_ep s options =
   (List.map (fun (n,v) -> (String.lowercase n, v)) params)
 ;;
 
-(* REMOVED: generate_encoded_words (depends on Netencoding) *)
-(* REMOVED: write_value *)
+let generate_encoded_words cs lang enc_tok text len1 len =
+  (* Generate a list of encoded words for the charset [cs], the
+   * language [lang], encoded as [enc_tok]. The text is passed
+   * in [text] (encoded only in [cs], [enc_tok] is not applied).
+   *
+   * [len1] are the number of bytes of the first token,
+   * [len] are the number of bytes for the following tokens.
+   * If [len1] is too small for at least one token, [len]
+   * is also used for the first token.
+   *
+   * If [cs] is not known to [Netconversion], it is assumed
+   * it is a single-byte encoding.
+   *)
+  (* Determine prefix and suffix of encoded words: *)
+  let prefix =
+    "=?" ^ cs ^
+    (if lang <> "" then "*" ^ lang else "") ^
+    ( match enc_tok with
+	  "Q"|"q" -> "?Q?"
+	| "B"|"b" -> "?B?"
+	| _ -> failwith "Mimestring.write_value: Unknown encoding"
+    ) in
+  let suffix = "?=" in
+  let prefix_len = String.length prefix in
+  let suffix_len = String.length suffix in
+
+  let encode s =
+    match enc_tok with
+	"Q"|"q" -> Nlencoding.Q.encode s
+      | "B"|"b" -> Nlencoding.Base64.encode s
+      | _ -> assert false (* already caught above *)
+  in
+
+  let find_tok_single_byte k l =
+    (* k: The position where to determine the token
+     * l: Desired length of the token
+     *
+     * Returns the position of the end of the token
+     *)
+    let p = ref k in
+    let l_cur() =
+      let slice = String.sub text k (!p - k) in
+      prefix_len + String.length (encode slice) + suffix_len
+    in
+    if l_cur() > l then
+      k
+    else (
+      try
+	while l_cur() <= l do
+	  incr p;
+	  if !p >= String.length text then raise Exit
+	done;
+	decr p;
+	!p
+      with
+	  Exit ->
+	    !p  (* at the end of the string *)
+    )
+  in
+
+  let rec generate_single_byte k l =
+    (* k: Position in enc_text
+     * l: Desired length of the token
+     *)
+    if k >= String.length text then
+      []
+    else (
+      let j = ref(find_tok_single_byte k l) in
+      if k = !j then (
+	(* l is too short, use len instead *)
+	j := find_tok_single_byte k len;
+	(* Still too short: Process only one char *)
+	if k = !j then (
+	  j := k+1
+	)
+      );
+      let tok =
+	prefix ^
+	encode(String.sub text k (!j - k)) ^
+	suffix in
+      tok :: generate_single_byte !j len
+    )
+  in
+
+  generate_single_byte 0 len1
+;;
+
+
+exception Line_too_long;;
+
+let write_value ?maxlen1 ?maxlen ?hardmaxlen1 ?hardmaxlen
+                ?(fold_qstring = true) ?(fold_literal = true)
+                ?unused ?hardunused
+                (ch : Nlchannels.out_obj_channel) tl =
+  let do_folding = (maxlen <> None && maxlen1 <> None) in
+    (* Whether to fold or not *)
+  let have_hard_limit =
+    do_folding && (hardmaxlen <> None && hardmaxlen1 <> None) in
+    (* Whether there is a hard limit or not *)
+  let still_unused = ref (match maxlen1 with Some x -> x | None -> 0) in
+    (* The number of characters that will fit into the current line *)
+  let still_unused_hard = ref (match hardmaxlen1 with Some x -> x | None ->0) in
+    (* The same number for the hard limit *)
+  let break_buffer = Buffer.create 80 in
+    (* Collects characters after the last breakpoint *)
+
+  let output_nobreak ?(pos=0) ?len s =
+    (* Outputs the string s without any breakpoint *)
+    let len = (match len with Some l -> l | None -> String.length s - pos) in
+    if do_folding then
+      Buffer.add_substring break_buffer s pos len
+    else
+      ch # really_output s pos len
+  in
+
+  let flush() =
+    (* Flushes the buffer (used by [output_break]) *)
+    let l = Buffer.length break_buffer in
+    ch # output_buffer break_buffer;
+    still_unused := !still_unused - l;
+    if have_hard_limit then still_unused_hard := !still_unused_hard - l;
+    Buffer.clear break_buffer;
+    (* Check hard limit: *)
+    if have_hard_limit && !still_unused_hard < 0 then raise Line_too_long;
+  in
+
+  let get_maxlen() =
+    match maxlen with
+	Some x -> x
+      | None -> assert false
+  in
+
+  let output_break() =
+    (* Outputs a breakpoint *)
+    if do_folding then begin
+      (* If the material collected in [break_buffer] fits into the line,
+       * just output it, and clear the [break_buffer].
+       *)
+      let l = Buffer.length break_buffer in
+      if !still_unused >= l then
+	flush()
+      else if l > 0 then begin
+	(* Otherwise output first a linefeed... *)
+	let new_length = get_maxlen() in
+	if new_length > !still_unused then begin (* otherwise \n does not help*)
+	  ch # output_char '\n';
+	  still_unused := new_length;
+	  (match hardmaxlen with
+	       Some x -> still_unused_hard := x
+	     | None -> ());
+	end;
+	(* ... and then the line: *)
+	flush();
+      end
+    end
+  in
+
+  let separate_words last =
+    (* If [last] is one of the tokens Atom, QString, DomainLiteral, or
+     * EncodedWord, output a breakpoint and a space.
+     *)
+    match last with
+	Atom _
+      | QString _
+      | DomainLiteral _
+      | EncodedWord(_,_,_) ->
+	  output_break();
+	  output_nobreak " "
+      | _ ->
+	  ()
+  in
+
+  let output_quoted special1 special2 fold s =
+    let k1 = ref 0 in
+    let k2 = ref 0 in
+    let l = String.length s in
+    let nobreak = ref true in
+    while !k2 < l do
+      let c = s.[ !k2 ] in
+      match c with
+	  '\\' ->
+	    output_nobreak ~pos:!k1 ~len:(!k2 - !k1) s;
+	    output_nobreak "\\\\";
+	    incr k2;
+	    k1 := !k2;
+	    nobreak := false;
+	| ' '
+	| '\t'
+	| '\n' ->
+	    output_nobreak ~pos:!k1 ~len:(!k2 - !k1) s;
+	    if fold && not !nobreak then output_break();
+	    if fold && !nobreak && !k2 > 0 then output_nobreak "\\";
+	    let s = match c with
+		' ' | '\n' -> " "
+	      | '\t' -> "\t"
+	      | _ -> assert false
+	    in
+	    output_nobreak s;
+	    incr k2;
+	    k1 := !k2;
+	    nobreak := true;  (* After a space there is never a breakpoint *)
+	| '\r' ->
+	    (* If the next character is LF: ignore. Otherwise
+	     * handle like space
+	     *)
+	    output_nobreak ~pos:!k1 ~len:(!k2 - !k1) s;
+	    incr k2;
+	    k1 := !k2;
+	    if !k2 >= l || s.[ !k2 ] <> '\n' then begin
+	      if fold && not !nobreak then output_break();
+	      if fold && !nobreak && !k2 > 0 then output_nobreak "\\";
+	      output_nobreak " ";
+	      nobreak := true;
+	    end
+	| _ ->
+	    if c = special1 || c = special2 then begin
+	      output_nobreak ~pos:!k1 ~len:(!k2 - !k1) s;
+	      output_nobreak "\\";
+	      output_nobreak (String.make 1 c);
+	      incr k2;
+	      k1 := !k2;
+	    end
+	    else begin
+	      incr k2;
+	    end;
+	    nobreak := false;
+    done;
+    output_nobreak ~pos:!k1 ~len:(!k2 - !k1) s;
+  in
+
+  let rec collect_words cs lang enc tl =
+    match tl with
+	EncodedWord((cs',lang'),enc',text) :: tl' ->
+	  if cs=cs' && lang=lang' && enc=enc' then
+	    let textrest, tl'' =  collect_words cs lang enc tl' in
+	    (text :: textrest, tl'')
+	  else
+	    ([], tl')
+      | _ ->
+	  ([], tl)
+  in
+
+  let output_encoded cs lang enc_tok text =
+    let len1 =
+      max 0 (!still_unused - Buffer.length break_buffer) in
+    let len =
+      if do_folding then get_maxlen () - 1 else max_int in
+    let words =
+      generate_encoded_words cs lang enc_tok text len1 len in
+    let first = ref true in
+    List.iter
+      (fun word ->
+	 if not !first then (
+	   output_break();
+	   output_nobreak " ";
+	 );
+	 output_nobreak word;
+	 first := false
+      )
+      words
+  in
+
+  let rec output_tokens last tl =
+    match tl with
+	Atom atext as cur :: tl' ->
+	  separate_words last;
+	  output_nobreak atext;
+	  output_tokens cur tl'
+      | Control c as cur :: tl' ->
+	  output_nobreak (String.make 1 c);
+	  output_tokens cur tl'
+      | (Special ' ' | Special '\t' | Comment as cur) :: tl' ->
+	  ( match last with
+	        Special ' '
+	      | Special '\t'
+	      | Comment -> ()
+	      | Atom _
+	      | QString _
+	      | DomainLiteral _
+	      | EncodedWord _
+	      | Special _ -> output_break();
+	      | _ -> ()
+	  );
+	  ( match cur with
+		Special c ->
+		  output_nobreak (String.make 1 c)
+	      | Comment ->
+		  output_nobreak " "
+	      | _ ->
+		  assert false
+	  );
+	  output_tokens cur tl'
+      | Special c as cur :: tl' ->
+	  output_nobreak (String.make 1 c);
+	  output_tokens cur tl'
+      | QString s as cur :: tl' ->
+	  separate_words last;
+	  output_nobreak "\"";
+	  output_quoted '"' '"' fold_qstring s;
+	  output_nobreak "\"";
+	  output_tokens cur tl'
+      | DomainLiteral s as cur :: tl' ->
+	  separate_words last;
+	  output_nobreak "[";
+	  output_quoted '[' ']' fold_literal s;
+	  output_nobreak "]";
+	  output_tokens cur tl'
+      | EncodedWord((cs,lang),enc,_) as cur :: _ ->
+	  separate_words last;
+	  let (textlist, tl'') = collect_words cs lang enc tl in
+	  let text = String.concat "" textlist in
+	  output_encoded cs lang enc text;
+	  output_tokens cur tl''
+      | End :: tl' ->
+	  output_tokens End tl'
+      | [] ->
+	  ()
+  in
+
+  output_tokens End tl;
+  output_break();
+
+  if do_folding then begin
+    match unused with
+	Some r -> r := !still_unused
+      | None -> ()
+  end;
+  if have_hard_limit then begin
+    match hardunused with
+	Some r -> r := !still_unused_hard
+      | None -> ()
+  end
+;;
 
 let hex = [| '0'; '1'; '2'; '3'; '4'; '5'; '6'; '7';
              '8'; '9'; 'A'; 'B'; 'C'; 'D'; 'E'; 'F' |] ;;
