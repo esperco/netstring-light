@@ -904,8 +904,6 @@ val split_mime_type : string -> (string * string)
 
 (** {1:printers_for_structured_values Printing Structured Values} *)
 
-(* REMOVED: write_value (depends on Netconversion) *)
-(*
 exception Line_too_long
   (** Raised when the hard limit of the line length is exceeded *)
 
@@ -921,7 +919,6 @@ val write_value :
       Nlchannels.out_obj_channel ->
       s_token list ->
         unit
-*)
     (** Writes the list of [s_token] to the [out_obj_channel]. The value
      * is optionally folded into several lines while writing, but this
      * is off by default. To enable folding, pass {b both} [maxlen1] and
