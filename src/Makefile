@@ -6,11 +6,17 @@ OCAMLOPT = ocamlfind opt -package "$(PACKAGES)"
 FLAGS = -g -annot
 
 default: all opt
+
 nldate.ml: nldate.mlp
 	camlp4o -impl $< > $@
+
 nlstring_str.ml: nlstring_str.mlp
 	camlp4o -impl $< > $@
-all: nldate.ml nlstring_str.ml
+
+nlhtml_scanner.ml: nlhtml_scanner.mll
+	ocamllex $<
+
+all: nldate.ml nlstring_str.ml nlhtml_scanner.ml
 	$(OCAMLC) -c $(FLAGS) nldate.mli
 	$(OCAMLC) -c $(FLAGS) nldate.ml
 	$(OCAMLC) -c $(FLAGS) nlbuffer.mli
@@ -37,11 +43,15 @@ all: nldate.ml nlstring_str.ml
 	$(OCAMLC) -c $(FLAGS) nlmime.ml
 	$(OCAMLC) -c $(FLAGS) nlsendmail.mli
 	$(OCAMLC) -c $(FLAGS) nlsendmail.ml
+	$(OCAMLC) -c $(FLAGS) nlhtml_scanner.ml
+	$(OCAMLC) -c $(FLAGS) nlhtml.mli
+	$(OCAMLC) -c $(FLAGS) nlhtml.ml
 	$(OCAMLC) -a $(FLAGS) -o netstring-light.cma \
 		nldate.cmo nlbuffer.cmo nlchannels.cmo nlencoding.cmo \
 		nlstring_str.cmo nlaux.cmo nlsockaddr.cmo nlstream.cmo \
 		nlurl.cmo nlmimestring.cmo nladdress.cmo nlmime.cmo \
-		nlsendmail.cmo
+		nlsendmail.cmo nlhtml_scanner.cmo nlhtml.cmo
+
 opt: nldate.ml nlstring_str.ml
 	$(OCAMLC) -c $(FLAGS) nldate.mli
 	$(OCAMLOPT) -c $(FLAGS) nldate.ml
@@ -69,30 +79,37 @@ opt: nldate.ml nlstring_str.ml
 	$(OCAMLOPT) -c $(FLAGS) nlmime.ml
 	$(OCAMLC) -c $(FLAGS) nlsendmail.mli
 	$(OCAMLOPT) -c $(FLAGS) nlsendmail.ml
+	$(OCAMLOPT) -c $(FLAGS) nlhtml_scanner.ml
+	$(OCAMLC) -c $(FLAGS) nlhtml.mli
+	$(OCAMLOPT) -c $(FLAGS) nlhtml.ml
 	$(OCAMLOPT) -a $(FLAGS) -o netstring-light.cmxa \
 		nldate.cmx nlbuffer.cmx nlchannels.cmx nlencoding.cmx \
 		nlstring_str.cmx nlaux.cmx nlsockaddr.cmx nlstream.cmx \
 		nlurl.cmx nlmimestring.cmx nladdress.cmx nlmime.cmx \
-		nlsendmail.cmx
+		nlsendmail.cmx nlhtml_scanner.cmx nlhtml.cmx
+
 doc:
 	mkdir -p ../html
 	ocamldoc -html -d ../html \
 		nldate.mli nlencoding.mli nlstring_str.mli nlaux.mli \
 		nlsockaddr.mli nlbuffer.mli nlchannels.mli nlstream.mli \
 		nlurl.mli nlmimestring.mli nladdress.mli nlmime.mli \
-		nlsendmail.mli
+		nlsendmail.mli nlhtml.mli
 
 netstring-light.cmxa: opt
 
 install:
 	ocamlfind install netstring-light META \
           $$(ls *.mli *.ml *.cm[ioxa] *.cmxa *.[oa] 2>/dev/null)
+
 uninstall:
 	-ocamlfind remove netstring-light
+
 reinstall:
 	$(MAKE) uninstall
 	$(MAKE) install
+
 clean:
 	rm -f *.cm[ioxa] *.o *.cmxa *.a *~ *.annot
 	rm -rf ../html
-	rm -f nldate.ml nlstring_str.ml
+	rm -f nldate.ml nlstring_str.ml nlhtml_scanner.ml
