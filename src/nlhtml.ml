@@ -1,13 +1,8 @@
-(* $Id$
- * ----------------------------------------------------------------------
- *
- *)
-
 open Nlhtml_scanner;;
 
 type document =
-    Element of (string  *  (string*string) list  *  document list)
-  | Data of string
+  [ `Element of (string  *  (string*string) list  *  document list)
+  | `Data of string ]
 ;;
 
 
@@ -107,7 +102,7 @@ let html40_dtd =
     (* ------------ BLOCK ELEMENTS ----------*)
     "p",                  (`Block, `Inline);
     (* %heading; *)
-    "h1",                 (`Block, `Inline); 
+    "h1",                 (`Block, `Inline);
     "h2",                 (`Block, `Inline);
     "h3",                 (`Block, `Inline);
     "h4",                 (`Block, `Inline);
@@ -123,7 +118,7 @@ let html40_dtd =
 						   `Elements ["li"]));
     (* %preformatted; *)
     "pre",                (`Block, `Sub_exclusions( [ "img"; "object"; "applet";
-						      "big"; "small"; "sub"; 
+						      "big"; "small"; "sub";
 						      "sup"; "font"; "basefont"],
 						    `Inline ));
     (* other: *)
@@ -133,7 +128,7 @@ let html40_dtd =
     "blockquote",         (`Block, (`Flow |. `Elements ["script"]));
                           (* strict DTD has `Block here *)
     "form",               (`Block, `Sub_exclusions( ["form"],
-						    `Flow |. 
+						    `Flow |.
 						       `Elements ["script"]));
                           (* strict DTD has `Block here *)
     "hr",                 (`Block, `Empty);
@@ -175,8 +170,8 @@ let html40_dtd =
     "base",               (`None, `Empty);
     "meta",               (`None, `Empty);
     "style",              (`None, `Special);
-    "html",               (`None, (`Flow |. 
-				       `Elements ["head"; 
+    "html",               (`None, (`Flow |.
+				       `Elements ["head";
 						  "title"; "base"; "script";
 						  "style"; "meta"; "link";
 						  "object";
@@ -289,8 +284,8 @@ end
 module Strset = Set.Make(S);;
 
 
-let parse_document ?(dtd = html40_dtd) 
-                   ?(return_declarations = false) 
+let parse_document ?(dtd = html40_dtd)
+                   ?(return_declarations = false)
                    ?(return_pis = false)
                    ?(return_comments = false)
                    ?(case_sensitive = false) buf =
@@ -383,7 +378,7 @@ let parse_document ?(dtd = html40_dtd)
 	(* If gp_name is an essential element, we are not allowed to close
 	 * it implicitly, even if that violates the DTD.
 	 *)
-	let current = Element (!current_name, !current_atts, 
+	let current = `Element (!current_name, !current_atts,
 			       List.rev !current_subs) in
 	current_name := gp_name;
 	current_atts := gp_atts;
@@ -455,7 +450,7 @@ let parse_document ?(dtd = html40_dtd)
 		  ( [ maybe_lowercase n, maybe_lowercase n ], true)
 	      | next' ->
 		  (* assume <tag name ... > <==> <tag name="name" ...> *)
-		  let toks, is_empty = 
+		  let toks, is_empty =
 		    parse_atts_lookahead next' in
 		  ( ( maybe_lowercase n, maybe_lowercase n ) :: toks,
 		    is_empty)
@@ -503,17 +498,17 @@ let parse_document ?(dtd = html40_dtd)
       | Lcomment ->
 	  let comment = parse_comment buf in
 	  if return_comments then
-	    current_subs := (Element("--",["contents",comment],[])) :: !current_subs;
+	    current_subs := (`Element("--",["contents",comment],[])) :: !current_subs;
 	  parse_next()
       | Ldoctype ->
 	  let decl = parse_doctype buf in
 	  if return_declarations then
-	    current_subs := (Element("!",["contents",decl],[])) :: !current_subs;
+	    current_subs := (`Element("!",["contents",decl],[])) :: !current_subs;
 	  parse_next()
       | Lpi ->
 	  let pi = parse_pi buf in
 	  if return_pis then
-	    current_subs := (Element("?",["contents",pi],[])) :: !current_subs;
+	    current_subs := (`Element("?",["contents",pi],[])) :: !current_subs;
 	  parse_next()
       | Lelement name ->
 	  let name = maybe_lowercase name in
@@ -522,13 +517,13 @@ let parse_document ?(dtd = html40_dtd)
 		`Empty ->
 		  let atts, _ = parse_atts() in
 		  unwind_stack name;
-		  current_subs := (Element(name, atts, [])) :: !current_subs;
+		  current_subs := (`Element(name, atts, [])) :: !current_subs;
 		  parse_next()
 	      | `Special ->
 		  let atts, is_empty = parse_atts() in
 		  unwind_stack name;
-		  let data = 
-		    if is_empty then 
+		  let data =
+		    if is_empty then
 		      ""
 		    else (
 		      let d = parse_special name in
@@ -536,7 +531,7 @@ let parse_document ?(dtd = html40_dtd)
 		      skip_element();
 		      d
 		    ) in
-		  current_subs := (Element(name, atts, [Data data])) :: !current_subs;
+		  current_subs := (`Element(name, atts, [`Data data])) :: !current_subs;
 		  parse_next()
 	      | _ ->
 		  let atts, is_empty = parse_atts() in
@@ -546,15 +541,15 @@ let parse_document ?(dtd = html40_dtd)
 		  unwind_stack name;
 		  if is_empty then (
 		    (* Simple case *)
-		    current_subs := (Element(name, atts, [])) :: !current_subs;
+		    current_subs := (`Element(name, atts, [])) :: !current_subs;
 		  )
 		  else (
 		    (* Push the current element on the stack, and this element
 		     * becomes the new current element:
 		     *)
 		    let new_excl = exclusions_of name in
-		    Stack.push 
-		      (!current_name, 
+		    Stack.push
+		      (!current_name,
 		       !current_atts, !current_subs, !current_excl)
 		      stack;
 		    current_name := name;
@@ -567,14 +562,14 @@ let parse_document ?(dtd = html40_dtd)
 		  parse_next()
 	  )
       | Cdata data ->
-	  current_subs := (Data data) :: !current_subs;
+	  current_subs := (`Data data) :: !current_subs;
 	  parse_next()
       | Lelementend name ->
 	  let name = maybe_lowercase name in
 	  (* Read until ">" *)
 	  skip_element();
 	  (* Search the element to close on the stack: *)
-	  let found = 
+	  let found =
 	    (name = !current_name) ||
 	    try
 	      Stack.iter
@@ -599,7 +594,7 @@ let parse_document ?(dtd = html40_dtd)
 	     *)
 	    while !current_name <> name do
 	      let old_name, old_atts, old_subs, old_excl = Stack.pop stack in
-	      current_subs := (Element (!current_name, !current_atts,
+	      current_subs := (`Element (!current_name, !current_atts,
 					List.rev !current_subs)) :: old_subs;
 	      current_name := old_name;
 	      current_atts := old_atts;
@@ -609,7 +604,7 @@ let parse_document ?(dtd = html40_dtd)
 	     * currently being closed.
 	     *)
 	    let old_name, old_atts, old_subs, old_excl = Stack.pop stack in
-	    current_subs := (Element (!current_name, !current_atts,
+	    current_subs := (`Element (!current_name, !current_atts,
 				      List.rev !current_subs)) :: old_subs;
 	    current_name := old_name;
 	    current_atts := old_atts;
@@ -630,7 +625,7 @@ let parse_document ?(dtd = html40_dtd)
 	(* Close all remaining elements: *)
 	while Stack.length stack > 0 do
 	  let old_name, old_atts, old_subs, old_excl = Stack.pop stack in
-	  current_subs := Element (!current_name,
+	  current_subs := `Element (!current_name,
 				   !current_atts,
 				   List.rev !current_subs) :: old_subs;
 	  current_name := old_name;
@@ -643,21 +638,21 @@ let parse_document ?(dtd = html40_dtd)
 let parse ?dtd ?return_declarations ?return_pis ?return_comments
           ?case_sensitive ch =
   let buf = Nlchannels.lexbuf_of_in_obj_channel ch in
-  parse_document ?dtd ?return_declarations ?return_comments ?return_pis 
+  parse_document ?dtd ?return_declarations ?return_comments ?return_pis
                  ?case_sensitive buf
-;;  
+;;
 
 let quote_quot_re = Nlstring_str.regexp "\"";;
 
 let write_ ~dtd ~xhtml write_os doc =
   let quote_quot s =
-    Nlstring_str.global_substitute quote_quot_re 
+    Nlstring_str.global_substitute quote_quot_re
       (fun _ _ -> "&quot;")
       s
   in
   let rec trav doc =
     match doc with
-	Element(name,atts,subdocs) ->
+	`Element(name,atts,subdocs) ->
 	  ( match name with
 		"!" ->
 		  write_os "<!";
@@ -673,7 +668,7 @@ let write_ ~dtd ~xhtml write_os doc =
 		  write_os "-->";
 	      | _ ->
 		  let is_empty =
-		    try 
+		    try
 		      let _, constr = List.assoc name dtd in
 		      constr = `Empty
 		    with
@@ -702,7 +697,7 @@ let write_ ~dtd ~xhtml write_os doc =
 		    write_os ">";
 		  end
 	  )
-      | Data s ->
+      | `Data s ->
 	  write_os s
   in
   try

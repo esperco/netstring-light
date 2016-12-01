@@ -1,8 +1,3 @@
-(* $Id$
- * ----------------------------------------------------------------------
- *
- *)
-
 (** Parsing of HTML *)
 
 
@@ -31,10 +26,8 @@
  * Names of elements and attributes must additionally be ASCII-only.
  *)
 type document =
-    Element of (string  *  (string*string) list  *  document list)
-  | Data of string
-;;
-
+  [ `Element of (string * (string * string) list * document list)
+  | `Data of string ]
 
 (** We also need a type that declares how to handle the various tags.
     This is called a "simplified DTD", as it is derived from SGML DTDs,
@@ -53,7 +46,7 @@ type document =
     something with bad HTML. As HTML allows tag minimization (many end tags
     can be omitted), the parser can read this as: [<B></B><P>something</P>]
     (and the [</B>] in the input is ignored).
-    
+
     If all start and all end tags are written out, changing the
     simplified_dtd does not make any difference.
 
@@ -83,7 +76,7 @@ type element_class =         (* What is the class of an element? *)
  *   property that every start tag must be explicitly ended
  * - [`None] means that the members of the class are neither block nor
  *   inline elements, but have to be handled specially
- * - [`Everywhere] means that the members of the class can occur everywhere, 
+ * - [`Everywhere] means that the members of the class can occur everywhere,
  *   regardless of whether a constraint allows it or not.
  *)
 
@@ -103,7 +96,7 @@ type model_constraint =      (* The constraint the subelements must fulfill *)
 ;;
 (** Model constraints define the possible sub elements of an element:
  * - [`Inline]: The sub elements must belong to the class [`Inline]
- * - [`Block]: The sub elements must be members of the classes [`Block] or 
+ * - [`Block]: The sub elements must be members of the classes [`Block] or
  *   [`Essential_block]
  * - [`Flow]: The sub elements must belong to the classes [`Inline], [`Block],
  *   or [`Essential_block]
@@ -114,12 +107,12 @@ type model_constraint =      (* The constraint the subelements must fulfill *)
  * - [`Elements l]: Only these enumerated elements may occur as sub elements
  * - [`Or(m1,m2)]: One of the constraints [m1] or [m2] must hold
  * - [`Except(m1,m2)]: The constraint [m1] must hold, and [m2] must not hold
- * - [`Sub_exclusions(l,m)]: The constraint [m] must hold; furthermore, 
+ * - [`Sub_exclusions(l,m)]: The constraint [m] must hold; furthermore,
  *   the elements enumerated in list [l] are not allowed as direct or
  *   indirect subelements, even if [m] or the model of a subelement would
  *   allow them. The difference to [`Except(m, `Elements l)] is that the
  *   exclusion is inherited to the subelements. The [`Sub_exclusions]
- *   expression must be toplevel, i.e. it must not occur within an [`Or], 
+ *   expression must be toplevel, i.e. it must not occur within an [`Or],
  *   [`Except], or another ['Sub_exclusions] expression.
  *
  * Note that the members of the class [`Everywhere] are allowed everywhere,
@@ -130,7 +123,7 @@ type model_constraint =      (* The constraint the subelements must fulfill *)
  * - Order, Number: We do neither specify in which order the sub elements must
  *   occur nor how often they can occur
  * - Inclusions: DTDs may describe that an element extraordinarily
- *   allows a list of elements in all sub elements. 
+ *   allows a list of elements in all sub elements.
  * - Optional tags: Whether start or end tags can be omitted (to some extent,
  *   this can be expressed with [`Essential_block], however)
  *)
@@ -151,7 +144,7 @@ val html40_dtd : simplified_dtd
 val relaxed_html40_dtd : simplified_dtd
   (** A relaxed version of the HTML 4.0 DTD that matches better common
    * practice. In particular, this DTD additionally allows that inline
-   * elements may span blocks. For example, 
+   * elements may span blocks. For example,
    * {[ <B>text1 <P>text2 ]}
    * is parsed as
    * {[ <B>text1 <P>text2</P></B> ]}
@@ -190,8 +183,8 @@ val parse_document : ?dtd:simplified_dtd ->            (* default: html40_dtd *)
                      ?case_sensitive:bool ->
                      Lexing.lexbuf ->
                        document list
-  (** Parses the HTML document from a [lexbuf] and returns it. 
-   * 
+  (** Parses the HTML document from a [lexbuf] and returns it.
+   *
    * @param dtd specifies the DTD to use. By default, [html40_dtd] is used which
    *   bases on the transitional HTML 4.0 DTD
    * @param return_declarations if set, the parser returns [<!...>] declarations
@@ -239,7 +232,7 @@ val parse : ?dtd:simplified_dtd ->            (* default: html40_dtd *)
  *
  * The following XML features are ok:
  * - Processing instructions
- * - Empty elements (e.g. [<br/>]) as long as the element is declared as 
+ * - Empty elements (e.g. [<br/>]) as long as the element is declared as
  *   [`Empty].
  *)
 
@@ -255,7 +248,7 @@ val parse : ?dtd:simplified_dtd ->            (* default: html40_dtd *)
  * read a UTF-16-encoded netchannel [ch], use:
  *
  * {[
- * let p = 
+ * let p =
  *   new Nlconversion.recoding_pipe ~in_enc:`Enc_utf16 ~out_enc:`Enc_utf8 () in
  * let ch' =
  *   new Nlchannels.input_filter ch p in
@@ -266,7 +259,7 @@ val parse : ?dtd:simplified_dtd ->            (* default: html40_dtd *)
  * ]}
  *)
 
-val write : ?dtd:simplified_dtd ->            (* default: html40_dtd *) 
+val write : ?dtd:simplified_dtd ->            (* default: html40_dtd *)
             ?xhtml:bool ->
             Nlchannels.out_obj_channel ->
             document list ->
